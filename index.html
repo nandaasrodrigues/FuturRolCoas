@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lab 2 cci 36</title>
+  </head>
+
+  <body>
+    <script src="./bezier.js"></script>
+    <script type="module">
+      import * as THREE from "https://cdn.skypack.dev/three@0.132.2";
+
+      import { OrbitControls } from "https://threejs.org/examples/jsm/controls/OrbitControls.js";
+      import { GLTFLoader } from "https://threejs.org/examples/jsm/loaders/GLTFLoader.js";
+      import { EXRLoader } from "https://threejs.org/examples/jsm/loaders/EXRLoader.js";
+      import { OBJLoader } from "https://threejs.org/examples/jsm/loaders/OBJLoader.js";
+      import { ExtrudeBufferGeometry } from "./ExtrudeGeometry.js";
+
+      // general vars
+      var scene, currentCamera, renderer, camEagle, camDrone, cam1p;
+      var controls;
+      var pngCubeRenderTarget;
+      var pngBackground;
+      
+      // objects
+      var carMesh;
+      var railMesh;
+
+      //build roller coaster cross section
+      const railShape = [
+        new THREE.Vector2(0, -3),
+        new THREE.Vector2(0, 3),
+        new THREE.Vector2(-1.1, 3),
+        new THREE.Vector2(-1.1, 2.9),
+        new THREE.Vector2(0, 2.9),
+        new THREE.Vector2(0, 2.9),
+        new THREE.Vector2(-1.1, -2.9),
+        new THREE.Vector2(-1.1, -3),
+        new THREE.Vector2(0, -3),
+      ];
+
+      // curve related vars
+      var curve;
+
+      // make the bezier points into vectors
+      for (var i = 0; i < bps.length; i++) {
+        for (var k = 0; k < 4; k++) {
+          bps[i][k] = new THREE.Vector3(bps[i][k].x, bps[i][k].y, bps[i][k].z);
+        }
+      }
+
+      const curveHandles = [];
+
+      function init() {
+
+        scene = new THREE.Scene();
+
+        var canvas = document.createElement("CANVAS");
+        canvas.style.position = "absolute";
+        canvas.style.top = "0px";
+        canvas.style.left = "0px";
+        document.body.appendChild(canvas);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true, canvas: canvas });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.outputEncoding = THREE.sRGBEncoding;
+        renderer.shadowCameraFar = currentCamera;
+        renderer.shadowMap.enabled = true
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap 
+
+        document.body.appendChild(renderer.domElement);
+
+        camEagle = new THREE.PerspectiveCamera(
+          100,
+          window.innerWidth / window.innerHeight,
+          0.1,
+          10000
+        );
+        cam1p = new THREE.PerspectiveCamera(
+          100,
+          window.innerWidth / window.innerHeight,
+          0.1,
+          10000
+        );
+        cam1p.rotation.y +=  Math.PI;
+        cam1p.rotation.z +=  Math.PI/2;
+        cam1p.rotation.x +=  Math.PI;
+        cam1p.position.x += 6
+        cam1p.position.z += 1
+
+        camDrone = new THREE.PerspectiveCamera(
+          100,
+          window.innerWidth / window.innerHeight,
+          0.1,
+          10000
+        );
+        
+        camEagle.position.z = 200;
+        camEagle.position.y = 500;
+        camEagle.lookAt(new THREE.Vector3(0, 0, 0));
+        
+        controls = new OrbitControls(camEagle, renderer.domElement);
+
+        const pmremGenerator = new THREE.PMREMGenerator(renderer);
+        pmremGenerator.compileEquirectangularShader();
+
+        THREE.DefaultLoadingManager.onLoad = function () {
+          pmremGenerator.dispose();
+        };
+
+        new THREE.TextureLoader().load("equi3.jpg", function (texture) {
+          texture.encoding = THREE.sRGBEncoding;
+          pngCubeRenderTarget = pmremGenerator.fromEquirectangular(texture);
+          pngBackground = pngCubeRenderTarget.texture;
+          texture.dispose();
+        });
+
+        // create handlers and add them to the scene 
+        for (const bzp of bps) {
+          const boxGeometry = new THREE.BoxGeometry(20, 20, 20);
+          const boxMaterial = new THREE.MeshStandardMaterial({
+            metalness: 1,
+            roughness: 0,
+            envMapIntensity: 1.0,
+          });
+          const handle = new THREE.Mesh(boxGeometry, boxMaterial);
+          for (const bz of bzp) {
+            handle.position.copy(bz);
+            curveHandles.push(handle);
+            scene.add(handle);
+            //invisible
+            handle.visible = false
+          }
+        }
+
+        // create curve
+        curve = new THREE.CurvePath();
+        for (const bzp of bps) {
+          const c = new THREE.CubicBezierCurve3(bzp[0], bzp[1], bzp[2], bzp[3]);
+          curve.add(c);
+        }
+
+        const extrudeSettings2 = {
+          steps: 1000,
+          bevelEnabled: false,
+          extrudePath: curve,
+        };
+        const railGeometry = new ExtrudeBufferGeometry(
+          new THREE.Shape(railShape),
+          extrudeSettings2
+        );
+        const material2 = new THREE.MeshLambertMaterial({
+          wireframe: false
+        });
+        var material2Texture = new THREE.TextureLoader().load("metal.jpg");
+        material2.map = material2Texture;
+
+        const mesh2 = new THREE.Mesh(railGeometry, material2);
+        mesh2.receiveShadow = true;
+        mesh2.castShadow = true;
+        scene.add(mesh2);
+
+        // create car
+        var geometry = new THREE.BoxGeometry(2, 1, 1);
+        var material = new THREE.MeshStandardMaterial({
+          metalness: 1,
+          roughness: 0,
+          envMapIntensity: 1.0,
+        });
+        carMesh = new THREE.Mesh(geometry, material);
+
+        const loader = new GLTFLoader();
+        loader.load(
+          "scene.gltf",
+          function (gltf) {
+            gltf.scene.children[0].children[0].children[0].position.x = -0.15
+            gltf.scene.children[0].children[0].children[0].position.y = 5;
+            gltf.scene.children[0].children[0].children[0].rotation.x =  Math.PI / 2;
+            gltf.scene.children[0].children[0].children[0].rotation.y =  Math.PI / 2;
+            carMesh.add(gltf.scene.children[0].children[0].children[0]);
+          },
+          undefined,
+          function (error) {
+            console.error(error);
+          }
+        );
+
+        carMesh.receiveShadow = true;
+        carMesh.castShadow = true
+        carMesh.needsUpdate = true
+        carMesh.add(cam1p)
+        scene.add(carMesh);
+
+        var light1 = new THREE.DirectionalLight(0xFFFFFF,1.0)
+        light1.position.set(-35,45,-60)//position.x,position.y,position.z)
+        light1.castShadow = true
+        light1.shadowDarkness =1;
+
+        const d = 200;
+        light1.shadow.camera.left = - d; 
+        light1.shadow.camera.right = d; 
+        light1.shadow.camera.top = d; 
+        light1.shadow.camera.bottom = - d; 
+       
+        scene.add(light1)
+
+        var helperLight1 = new THREE.DirectionalLightHelper(light1, 5);
+        light1.add(helperLight1)
+
+        var light2 = new THREE.DirectionalLight(0xFFFFFF,1.0)
+        light2.position.set(-70,90,-120)
+        light2.castShadow = true
+        light2.shadowDarkness =1;
+        
+        light2.shadow.camera.left = - d; 
+        light2.shadow.camera.right = d; 
+        light2.shadow.camera.top = d; 
+        light2.shadow.camera.bottom = - d; 
+        
+        scene.add(light2)
+
+        var helperLight2 = new THREE.DirectionalLightHelper(light2, 5);
+        light2.add(helperLight2)
+
+        var light3 = new THREE.AmbientLight(0xffffff);
+        light3.intensity = 0.05;
+        light3.castShadow = true
+        scene.add(light3);
+      }
+
+      // update the environment map effect in objects
+      function refreshEnvMap() {
+        var newEnvMap = pngCubeRenderTarget
+          ? pngCubeRenderTarget.texture
+          : null;
+
+        carMesh.material.envMap = newEnvMap;
+        carMesh.material.needsUpdate = true;
+
+        if (carMesh.children[1]) {
+          for (var i = 0; i < carMesh.children[1].children.length; i++) {
+            carMesh.children[1].children[i].material.metalness = 1;
+            carMesh.children[1].children[i].material.roughness = 0;
+            (carMesh.children[1].children[i].material.envMapIntensity = 2),
+            (carMesh.children[1].children[i].material.envMap = newEnvMap);
+            carMesh.children[1].children[i].castShadow = true
+            carMesh.children[1].children[i].receiveShadow = true
+            carMesh.children[1].children[i].material.needsUpdate = true;
+            carMesh.children[1].children[i].needsUpdate = true
+          }
+        }
+
+      }
+      function render() {
+        var background = scene.background;
+        background = pngBackground;
+        scene.background = background;
+        refreshEnvMap();
+        renderer.render(scene, currentCamera);
+      }
+
+      const nPoints = 10000;
+      function animate() {
+        requestAnimationFrame(animate);
+
+        relativePosition += Math.sqrt(K1 - K2 * carMesh.position.y)
+        posIndex = Math.floor(relativePosition );
+
+        if (relativePosition > nPoints - 1) {
+          relativePosition = 0;
+        }
+
+        var camPos = curve.getPoint(posIndex / nPoints);
+        var tangent = frenetFrames.tangents[posIndex];
+        var binormal = frenetFrames.binormals[posIndex];
+        var normal = frenetFrames.normals[posIndex];
+        carMesh.position.copy(camPos)//.sub(binormal.clone().multiplyScalar(5));
+        camDrone.position.copy(camPos).sub(normal.clone().multiplyScalar(50)).add(binormal.clone().multiplyScalar(50));
+        camDrone.lookAt(camPos)
+
+        carMesh.up.copy(new THREE.Vector3().crossVectors(tangent, normal));
+        var adjustedDirVector = carMesh
+          .localToWorld(myScratchVector.set(0, 0, 0))
+          .add(tangent);
+        carMesh.lookAt(adjustedDirVector);
+
+        render();
+      }
+
+      init();
+
+      var posIndex = 0;
+      var relativePosition = 0
+      var maxy = curve
+        .getPoints(nPoints)
+        .map((point) => point.y)
+        .reduce((a, b) => Math.max(a, b)); 
+      var miny = curve
+        .getPoints(nPoints)
+        .map((point) => point.y)
+        .reduce((a, b) => Math.min(a, b)); 
+
+      
+      const maxv = 1000 * nPoints / 10000
+      const minv = 25 * nPoints / 10000
+      const K2 = (maxv - minv) / (maxy - miny);
+      const K1 = maxv + K2 * miny;
+
+      var frenetFrames = curve.computeFrenetFrames(nPoints, true);
+      var myScratchVector = new THREE.Vector3();
+
+      currentCamera = camEagle
+      currentCamera = camDrone
+      document.addEventListener('keydown', (event) => {
+          var name = event.key;
+          var code = event.code;
+          if (name === '1') {
+            currentCamera = camEagle
+          }
+          if (name === '2') {
+            currentCamera = cam1p
+          }
+          if (name === '3') {
+            currentCamera = camDrone
+          }
+        }, false);
+      animate();
+    </script>
+  </body>
+</html>
