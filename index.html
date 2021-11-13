@@ -26,7 +26,7 @@
       
       // objects
       var carMesh;
-      var railMesh;
+      var mesh2;
 
       //build roller coaster cross section
       const railShape = [
@@ -158,7 +158,8 @@
         const material2 = new THREE.MeshStandardMaterial({
           color: 0xffffff,
           metalness: 1,
-          roughness: 1
+          roughness: 1,
+	  envMapIntensity: 1.0
         });
         var material2Texture = new THREE.TextureLoader().load("metal.jpg");
         material2.map = material2Texture;
@@ -268,8 +269,12 @@
             carMesh.children[1].children[i].needsUpdate = true
           }
         }
-
+	 
+	mesh2.material.envMap = newEnvMap;
+        mesh2.material.needsUpdate = true;
+	
       }
+	    
       function render() {
         var background = scene.background;
         background = pngBackground;
