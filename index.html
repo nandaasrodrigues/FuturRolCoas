@@ -164,7 +164,7 @@
         var material2Texture = new THREE.TextureLoader().load("metal.jpg");
         material2.map = material2Texture;
 
-        const mesh2 = new THREE.Mesh(railGeometry, material2);
+        mesh2 = new THREE.Mesh(railGeometry, material2);
         mesh2.receiveShadow = true;
         mesh2.castShadow = true;
         scene.add(mesh2);
